@@ -3,10 +3,13 @@ name: Generate Videos
 on:
   workflow_dispatch:
     inputs:
-      project_zip:
-        description: 'اسم ملف ZIP في آخر Release (مثال: pdf01.zip)'
+      drive_url:
+        description: 'رابط ملف ZIP على Google Drive (مثال: https://drive.google.com/file/d/FILE_ID/view)'
         required: true
-        default: 'pdf01.zip'
+      project_name:
+        description: 'اسم المشروع (مثال: pdf01) — يُستخدم كاسم للمجلد والـ artifact'
+        required: true
+        default: 'pdf01'
 
 jobs:
   generate:
@@ -23,16 +26,20 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
-          pip install numpy Pillow opencv-python-headless pydub requests
+          pip install numpy Pillow opencv-python-headless pydub requests gdown
           ffmpeg -version | head -1
 
       - name: Download and extract project
         run: |
-          gh release download --pattern "${{ github.event.inputs.project_zip }}" --dir .
-          unzip "${{ github.event.inputs.project_zip }}"
+          ZIP_NAME="${{ github.event.inputs.project_name }}.zip"
 
-          FOLDER_NAME="${{ github.event.inputs.project_zip }}"
-          FOLDER_NAME="${FOLDER_NAME%.zip}"
+          echo "⬇️ تنزيل $ZIP_NAME من Google Drive..."
+          gdown --fuzzy "${{ github.event.inputs.drive_url }}" -O "$ZIP_NAME"
+
+          echo "📦 فك الضغط..."
+          unzip "$ZIP_NAME"
+
+          FOLDER_NAME="${{ github.event.inputs.project_name }}"
 
           if [ ! -d "$FOLDER_NAME" ]; then
             mkdir -p "$FOLDER_NAME"
@@ -49,9 +56,7 @@ jobs:
           echo "🔊 ملفات Audio:"
           ls "$FOLDER_NAME"/input/audio/ | wc -l
           echo "💾 حجم المشروع:"
-          du -sh "$FOLDER_NAME"/
-        env:
-          GH_TOKEN: ${{ github.token }}
+          du -sh "$FOLDER_NAME"/"
 
       - name: Generate WebM videos
         run: |
@@ -63,6 +68,6 @@ jobs:
       - name: Upload output
         uses: actions/upload-artifact@v4
         with:
-          name: output-${{ env.FOLDER_NAME }}
+          name: output-${{ github.event.inputs.project_name }}
           path: ${{ env.FOLDER_NAME }}/output/
           retention-days: 5
